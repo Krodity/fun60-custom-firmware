@@ -21,6 +21,12 @@
  * non-modifier keys placed (0..6), or 6 when rollover occurred. */
 uint8_t hid_build_boot_report(const uint8_t *pressed, const uint8_t *keymap, uint8_t *out);
 
+/* Resolve the active layer into out[KS_NUM_KEYS]: if any pressed site maps to
+ * fn_code in `base`, sites with a nonzero `fn` entry use it; everything else uses
+ * `base`. The Fn site itself resolves to 0 (it never reaches the host). */
+void keymap_resolve(const uint8_t *pressed, const uint8_t *base, const uint8_t *fn,
+                    uint8_t fn_code, uint8_t *out);
+
 /* Build a 128-bit NKRO usage bitmap (set bit = usage pressed). Modifiers are
  * also reflected as their usage bits. Writes HID_NKRO_BITMAP_LEN bytes. */
 void hid_build_nkro_bitmap(const uint8_t *pressed, const uint8_t *keymap, uint8_t *out);

@@ -14,3 +14,9 @@
 
 # OS / editor
 .DS_Store
+
+# Python
+__pycache__/
+
+# Proprietary vendor stock images fetched by ry-flash (never commit)
+/stock/

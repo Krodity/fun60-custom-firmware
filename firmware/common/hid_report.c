@@ -13,7 +13,7 @@ uint8_t hid_build_boot_report(const uint8_t *pressed, const uint8_t *keymap, uin
   for (unsigned i = 0; i < KS_NUM_KEYS; i++) {
     if (!pressed[i]) continue;
     uint8_t usage = keymap[i];
-    if (usage == 0x00) continue;
+    if (usage == 0x00 || usage >= 0xE8) continue;   /* 0xE8+: internal codes (KC_FN) */
     if (usage >= 0xE0 && usage <= 0xE7) {
       mod |= (uint8_t)(1u << (usage - 0xE0));
       continue;
@@ -44,7 +44,20 @@ void hid_build_nkro_bitmap(const uint8_t *pressed, const uint8_t *keymap, uint8_
   for (unsigned i = 0; i < KS_NUM_KEYS; i++) {
     if (!pressed[i]) continue;
     uint8_t usage = keymap[i];
-    if (usage == 0x00) continue;
+    if (usage == 0x00 || usage >= 0xE8) continue;   /* 0xE8+: internal codes (KC_FN) */
     out[usage >> 3] |= (uint8_t)(1u << (usage & 7));
+  }
+}
+
+void keymap_resolve(const uint8_t *pressed, const uint8_t *base, const uint8_t *fn,
+                    uint8_t fn_code, uint8_t *out)
+{
+  uint8_t fn_on = 0;
+  for (unsigned i = 0; i < KS_NUM_KEYS; i++)
+    if (pressed[i] && base[i] == fn_code) { fn_on = 1; break; }
+  for (unsigned i = 0; i < KS_NUM_KEYS; i++) {
+    if (base[i] == fn_code)        out[i] = 0;
+    else if (fn_on && fn[i] != 0)  out[i] = fn[i];
+    else                           out[i] = base[i];
   }
 }

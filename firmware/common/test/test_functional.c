@@ -86,6 +86,19 @@ int main(void)
       if (!(f[i][0] == 255 && f[i][1] == 0 && f[i][2] == 0)) uniform = 0;
     CHECK(uniform, "Static red => every LED (255,0,0) at full brightness");
 
+    /* Random rainbow: LEDs differ from each other, and each one moves over time */
+    memset(&p, 0, sizeof p);
+    p.mode = LED_MODE_RANDOM_RAINBOW; p.brightness = 4; p.speed = 3; p.flag = 8;
+    led_effects_render(&p, NULL, 0, f);
+    anydiff = 0; for (i = 1; i < MG_NUM_LEDS; i++) if (memcmp(f[i], f[0], 3)) anydiff = 1;
+    CHECK(anydiff, "Random rainbow => LEDs start at different colours");
+    {
+      led_frame_t f2; int moved = 0;
+      led_effects_render(&p, NULL, 900, f2);
+      for (i = 0; i < MG_NUM_LEDS; i++) if (memcmp(f[i], f2[i], 3)) moved++;
+      CHECK(moved > (int)(MG_NUM_LEDS / 2), "Random rainbow => colours cycle over time");
+    }
+
     /* Breathing: uniform across LEDs, but the envelope changes over time */
     memset(&p, 0, sizeof p);
     p.mode = LED_MODE_BREATHING; p.brightness = 4; p.speed = 3;

@@ -200,6 +200,16 @@ static int mag_get(monsgeek_state_t *st, uint8_t *report)
 
 /* ---- dispatcher ---------------------------------------------------------- */
 
+volatile uint8_t  g_boot_stage;
+volatile uint32_t g_loop_count;
+volatile const uint16_t *g_diag_raw;
+volatile uint16_t g_diag_n;
+volatile uint32_t g_adc_timeouts;
+volatile uint8_t  g_presslog[128];
+volatile uint8_t  g_presslog_n;
+volatile const uint8_t *g_diag_pressed;
+__attribute__((weak)) int board_diag_cmd(uint8_t *report) { (void)report; return 0; }
+
 int monsgeek_vendor_dispatch(monsgeek_state_t *st, uint8_t *report)
 {
   uint8_t opcode = report[0];
@@ -214,9 +224,51 @@ int monsgeek_vendor_dispatch(monsgeek_state_t *st, uint8_t *report)
   /* ---------------- device-info GETs ---------------- */
   case FEA_GET_INFOR:              /* 0x8F */
     report[1] = MONSGEEK_INFO_DEVID_LO; report[2] = MONSGEEK_INFO_DEVID_HI;
-    report[3] = 0; report[4] = 0; report[5] = 0; report[6] = 0;
+    report[3] = g_boot_stage;                       /* bring-up diagnostics */
+    report[4] = (uint8_t)g_loop_count; report[5] = (uint8_t)(g_loop_count >> 8);
+    report[6] = (uint8_t)(g_loop_count >> 16);
     report[7] = MONSGEEK_INFO_VER_HI;   report[8] = MONSGEEK_INFO_VER_LO;
     return 1;
+
+  case FEA_DIAG_RAW: {             /* 0xF0 <start>: bring-up diagnostics       */
+    /* reply: [1]=start [2]=total sites [3]=n returned [4..5]=ADC timeouts (u16 LE)
+     *        [8..] = n raw samples, u16 LE (up to 28 per report) */
+    uint8_t start = report[1], n = 0;
+    uint32_t to = g_adc_timeouts;
+    while (n < 28 && g_diag_raw && (uint16_t)(start + n) < g_diag_n) {
+      uint16_t v = g_diag_raw[start + n];
+      report[8 + 2 * n] = (uint8_t)v; report[9 + 2 * n] = (uint8_t)(v >> 8);
+      n++;
+    }
+    report[2] = (uint8_t)g_diag_n; report[3] = n;
+    report[4] = (uint8_t)to; report[5] = (uint8_t)(to >> 8);
+    return 1;
+  }
+
+  case FEA_DIAG_GPIO_POKE:
+  case FEA_DIAG_HWSTATUS:
+  case FEA_LIVE_LEDS:
+  case FEA_LEDMAP_CTRL:
+  case FEA_LEDMAP_READ:
+    return board_diag_cmd(report);
+
+  case FEA_DIAG_PRESSED: {         /* 0xF2: [1]=count pressed [8..] bitmap of sites */
+    uint8_t cnt = 0;
+    for (unsigned i = 8; i < 64; i++) report[i] = 0;
+    for (unsigned i = 0; g_diag_pressed && i < g_diag_n && i < 8u * 56u; i++)
+      if (g_diag_pressed[i]) { cnt++; report[8 + i / 8] |= (uint8_t)(1u << (i % 8)); }
+    report[1] = cnt;
+    return 1;
+  }
+
+  case FEA_DIAG_PRESSLOG: {        /* 0xF1 <start> [0xC1=clear]: press log     */
+    /* reply: [1]=start [2]=total logged [3]=n returned [8..] = site indices */
+    uint8_t start = report[1], n = 0;
+    if (report[2] == 0xC1) { g_presslog_n = 0; }
+    while (n < 56 && (uint8_t)(start + n) < g_presslog_n) { report[8 + n] = g_presslog[start + n]; n++; }
+    report[2] = g_presslog_n; report[3] = n;
+    return 1;
+  }
 
   case FEA_GET_REV:                /* 0x80 */
   case 0x81:

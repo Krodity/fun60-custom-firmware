@@ -34,5 +34,6 @@ extern usbd_class_handler monsgeek_class_handler;
 
 /* send a 32-byte unsolicited event (VenderMsg, report ID 5) over EP2 IN */
 usb_sts_type monsgeek_send_event(void *udev, uint8_t *report32);
+extern volatile uint8_t g_ep_busy[8];   /* IN endpoint in flight (cleared on completion) */
 
 #endif /* MONSGEEK_CLASS_H */

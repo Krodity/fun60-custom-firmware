@@ -47,6 +47,7 @@ typedef struct {
   uint8_t  pressed;         /* actuation output                                  */
   uint8_t  primed;          /* baseline has been seeded                          */
   uint8_t  rt_armed;        /* RT: actuation point reached this press-session    */
+  uint8_t  heal;            /* baseline-heal divider (released, below half actuation) */
 } hall_key_t;
 
 typedef struct {

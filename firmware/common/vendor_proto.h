@@ -74,7 +74,15 @@ enum {
   FEA_GET_MAG_CAL      = 0x9C,
   FEA_GET_KEY_MAG_MODE = 0x9D,
   FEA_GET_MULTI_MAG    = 0xE5,
-  FEA_GET_FEATURE_LIST = 0xE6
+  FEA_GET_FEATURE_LIST = 0xE6,
+  FEA_DIAG_RAW         = 0xF0,  /* bring-up only (not stock): raw ADC samples, see vendor_proto.c */
+  FEA_DIAG_PRESSLOG    = 0xF1,  /* bring-up only: ordered first-press log, see main.c */
+  FEA_DIAG_PRESSED     = 0xF2,  /* bring-up only: hall engine pressed[] bitmap */
+  FEA_DIAG_GPIO_POKE   = 0xF3,  /* bring-up only: <port 0=A..5=F> <pin> <1=set 0=clr> (board hook) */
+  FEA_DIAG_HWSTATUS    = 0xF4,  /* bring-up only: LED/DMA/SPI/GPIO snapshot (board hook) */
+  FEA_LIVE_LEDS        = 0xF5,  /* live frames: <start led> <n<=18> .. RGB from [8]; shown in "Live" lighting (board hook) */
+  FEA_LEDMAP_CTRL      = 0xF6,  /* LED->key mapping: <1 start | 0 cancel | 2 status> (board hook) */
+  FEA_LEDMAP_READ      = 0xF7   /* read the LED->scan-site map: <start led> -> sites from [8] (board hook) */
 };
 
 /* Magnetism sub-commands (SET 0x65 / GET 0xE5). */
@@ -126,5 +134,20 @@ int monsgeek_vendor_dispatch(monsgeek_state_t *st, uint8_t *report);
 /* Decode the currently-selected LED effect (cfg[8] + rgb table) into engine
  * parameters. Returns the "LED enabled" flag (cfg[4] bit4): 0 => render Off. */
 int monsgeek_get_led_params(const monsgeek_state_t *st, led_params_t *out);
+
+/* Bring-up diagnostics, echoed in GET_INFOR bytes 3..6 (stock leaves them 0):
+ * byte 3 = last boot stage reached (see main.c), bytes 4..6 = main-loop pass count (u24 LE). */
+extern volatile uint8_t  g_boot_stage;
+extern volatile uint32_t g_loop_count;
+/* raw ADC frame for FEA_DIAG_RAW (set by main.c) and the ADC-timeout counter (keyscan.c) */
+extern volatile const uint16_t *g_diag_raw;
+extern volatile uint16_t g_diag_n;
+extern volatile uint32_t g_adc_timeouts;
+/* press log (DIAG_NO_HID builds): site indices in first-press order */
+extern volatile uint8_t  g_presslog[128];
+extern volatile uint8_t  g_presslog_n;
+extern volatile const uint8_t *g_diag_pressed;   /* hall engine output (main.c) */
+/* hardware diagnostics hook: fills report, returns 1 if handled (main.c; weak no-op default) */
+int board_diag_cmd(uint8_t *report);
 
 #endif /* MONSGEEK_VENDOR_PROTO_H */

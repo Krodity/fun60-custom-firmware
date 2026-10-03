@@ -39,7 +39,7 @@ const uint8_t monsgeek_config_desc[MG_CONFIG_DESC_SIZE] =
 {
   /* --- configuration header --- */
   0x09, 0x02,
-  LB(MG_CONFIG_DESC_SIZE), HB(MG_CONFIG_DESC_SIZE),  /* wTotalLength = 77      */
+  LB(MG_CONFIG_DESC_SIZE), HB(MG_CONFIG_DESC_SIZE),  /* wTotalLength = 84      */
   0x03,                 /* bNumInterfaces = 3                                 */
   0x01,                 /* bConfigurationValue                                */
   0x00,                 /* iConfiguration                                     */
@@ -62,11 +62,13 @@ const uint8_t monsgeek_config_desc[MG_CONFIG_DESC_SIZE] =
   0x07, 0x05, MG_EP_EXT_IN, 0x03, 0x40, 0x00, 0x01,
         /* ENDPOINT 0x82 interrupt, 64 byte, bInterval 1 ms                   */
 
-  /* --- IF2: vendor config (vendor interface, no endpoint) --- */
-  0x09, 0x04, 0x02, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
-        /* INTERFACE if=2 alt=0 nEP=0 class=HID sub=0 proto=0                 */
+  /* --- IF2: vendor config (feature reports over EP0 + idle interrupt IN) --- */
+  0x09, 0x04, 0x02, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00,
+        /* INTERFACE if=2 alt=0 nEP=1 class=HID sub=0 proto=0                 */
   0x09, 0x21, 0x11, 0x01, 0x00, 0x01, 0x22,
-        LB(MG_VENDOR_REPORT_SIZE), HB(MG_VENDOR_REPORT_SIZE)       /* HID desc */
+        LB(MG_VENDOR_REPORT_SIZE), HB(MG_VENDOR_REPORT_SIZE),      /* HID desc */
+  0x07, 0x05, MG_EP_VENDOR_IN, 0x03, 0x40, 0x00, 0x01,
+        /* ENDPOINT 0x83 interrupt, 64 byte, bInterval 1 (never sent on)      */
 };
 
 /* ----------------------------------------------------------------------------

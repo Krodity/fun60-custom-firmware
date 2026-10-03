@@ -39,7 +39,10 @@ INCS = -I$(SRC) -I$(GENDIR) \
        -I$(DRV)/inc \
        -I$(USBDRV)/inc
 
-DEFS = -DAT32F405RCT7 -DUSE_STDPERIPH_DRIVER -DUSB_OTG_FS
+# Stock RY5088 bootloader + app drive OTGHS (0x40040000; enumerates high-speed), never OTGFS1 —
+# OTGFS1 (PA11/PA12) is not wired to the USB-C port, so an OTG_FS build never enumerates.
+USB_CORE ?= USB_OTG_HS
+DEFS = -DAT32F405RCT7 -DUSE_STDPERIPH_DRIVER -D$(USB_CORE) $(EXTRA_DEFS)   # e.g. EXTRA_DEFS=-DDIAG_NO_HID
 
 ARCH    = -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 CFLAGS  = $(ARCH) $(DEFS) $(INCS) -ffunction-sections -fdata-sections -Os -g3 -Wall

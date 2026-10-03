@@ -1,0 +1,196 @@
+# MonsGeek FUN60 Ultra (dev_id 2381, ry5088_fun60ultra_8k_dm) — RY5088 board profile.
+#
+# ⚠️ HARDWARE: the owner's 2381 board is silkscreened "FUN60_PRO(5088-1049)-3M-RGB V0.3-20250424" — a
+# FUN60 PRO PCB, NOT the 2307 Ultra reference design. Matrix/LED/pin values copied from 2307 are suspect;
+# custom firmware built from this profile hung before USB enumeration on 2026-10-03.
+#
+# Drafted from the 2307 reference. Stock fw v302 (cloud) sha256
+# c3204d50a60afc7a0f573638c440cd1762e78cd4c25462aa39a6927d0b5481f3; chip-ID
+# "AT32F405 8KMKB" @0x5000, SP 0x2000BEC8 / reset 0x080054F9. Live board: USB
+# 3151:502D, GET_INFOR dev_id 2381 / v304, vendor HID descriptor identical to
+# docs/protocol.md §1. Values marked TODO are NOT yet confirmed on hardware.
+#
+# A profile is the ONE file a contributor writes to add a board. The generator
+# (gen/gen_profile.py) turns it into the board_config.h / board_keymap.h /
+# board_led_map.c that the shared firmware in common/ compiles against:
+#
+#     make PROFILE=2307            # -> ry5088_2307.bin
+#
+# Fields left out fall back to the platform defaults in gen/gen_profile.py
+# (settle timings, ADC sample window, WS2812 bit cells, the LED palette, the
+# SPI wireless bus pins). This file lists them explicitly because it is the
+# reference other profiles are diffed against.
+
+[meta]
+dev_id       = 2381            # GET_INFOR id (decimal) — read from the live board.
+display_name = "FUN60 Ultra"
+name         = "ry5088_fun60ultra_8k_dm"   # vendor internal model name (devices.json)
+switch_type  = "TMR"          # "HE" | "TMR"  # confirmed by owner
+wireless     = false          # wired-only (confirmed by owner); consistent with the
+                              # stock image having no " FUN60 Ultra-1" radio-identity string
+
+[usb]
+vid              = 0x3151
+pid              = 0x502D     # observed on the live board (devices.json agrees: 20525)
+bcd_device       = 0x0304     # observed: lsusb bcdDevice 3.04 on v304
+manufacturer_str = "MonsGeek Keyboard"
+product_str      = "MonsGeek Keyboard" # live iProduct; stock image has no " FUN60 Ultra-1"
+config_str       = "Keyboard Config"
+interface_str    = "Keyboard Interface"
+
+[version]
+hi = 0x04                     # GET_INFOR v304 (live board; cloud image is v302)
+lo = 0x03
+
+[matrix]
+# Analog scan: a CD4017-style column counter selects the active column, a 3-bit
+# mux selects the row, and one ADC pin reads the selected site.
+cols  = 14                    # column-counter positions  # TODO: confirm on hardware (60% sibling of 2307)
+rows  = 8                     # mux rows; key = col*rows + row. Stock 2381 app indexes
+                              # sites as col = i>>3, row = i&7 (3-bit mux, 8 rows).
+# sites = cols*rows = 84 (derived)
+#
+# Pins below are the RE'd reference-design wiring, kept for the record. The
+# firmware uses them as compiled-in defaults in common/keyscan.c; the generator
+# does NOT emit them. To rewire a board, edit common/keyscan.c — not just this.
+reset_pin  = "PA4"            # counter master reset / clock gate
+clock_pin  = "PA5"            # counter clock
+strobe_pin = "PA6"            # counter output strobe / enable
+row_addr_pins = ["PC6", "PC7", "PC8"]   # mux address A0(LSB), A1, A2(MSB)
+enable_pin = "PF7"            # sensor / mux enable (driven high)
+adc_pin     = "PA2"           # analog-mux common output
+adc_channel = 2               # ADC1 channel for adc_pin
+settle_col  = 200             # settle loop after a column move (HW-tunable)
+settle_mux  = 40              # settle loop after a mux change (HW-tunable)
+
+[hall]
+# Magnetic (Hall / TMR) travel model. press_decreases = true means pressing a key
+# LOWERS the ADC reading (travel = baseline - raw).
+press_decreases  = true       # confirmed 2026-10-03: full press drops ~1100-1150 counts
+full_travel_cmm  = 400        # nominal full travel, hundredths of a mm (4.00 mm)
+assumed_span     = 1150       # measured: idle ~2000-2220, bottomed-out ~900-1100
+noise_counts     = 16         # baseline drift-follow noise band
+# default actuation / rapid-trigger, hundredths of a mm (re-settable in the app)
+press_cmm        = 200        # 2.00 mm actuation
+release_cmm      = 150        # 1.50 mm release
+rt_press_cmm     = 50         # 0.50 mm rapid-trigger press delta
+rt_release_cmm   = 50         # 0.50 mm rapid-trigger release delta
+
+[leds]
+count   = 61                  # per-key WS2812 count  # TODO: confirm on hardware (LED chain + serpentine copied from 2307)
+max_col = 14                  # physical column span (0..max_col)
+max_row = 5                   # physical row span (1..max_row)
+# Serpentine wiring: chain index -> physical (col,row). Engine reads these tables.
+phys_col = [
+   0, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3,
+   2, 0, 0, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,14,14,11,10, 9, 8, 7, 6, 5, 4, 3, 2,
+   0, 0, 1, 2, 6,10,11,13,14,
+]
+phys_row = [
+   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+   2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+   4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5,
+]
+
+# Scan site under each LED in chain order (LED i lights the key at site led_site[i]).
+# Learnt on hardware with `fun60-rgb map` (2026-10-03): a row serpentine,
+# Esc..Bksp, \..Tab, Caps..Enter, RShift..LShift, LCtrl..RCtrl.
+led_site = [
+     1,   9,  17,  25,  33,  41,  49,  57,  65,  73,  81,  89,  97, 105, 106,  98,
+    90,  82,  74,  66,  58,  50,  42,  34,  26,  18,  10,   2,   3,  11,  19,  27,
+    35,  43,  51,  59,  67,  75,  83,  91, 107, 100,  92,  84,  76,  68,  60,  52,
+    44,  36,  28,  20,   4,   5,  21,  29,  53,  85,  93, 101, 109,
+]
+
+[rgb]
+# Reference-design wiring / timing (documentation; compiled-in via common/rgb.c).
+bit0     = 0xC0               # WS2812 logical-0 SPI byte
+bit1     = 0xF0               # WS2812 logical-1 SPI byte
+data_pin = "PA10"            # SPI2 MOSI (AF5)
+order    = "GRB"             # WS2812 wire colour order
+
+# [wireless] omitted: no PAN1080 radio on this board (meta.wireless = false).
+
+[keymap]
+# HID usage IDs, index = col*8 + row (14 cols x 8 mux rows; rows 0/6/7 unused).
+# Measured 2026-10-03 by pressing every key in order on the diag build (FEA_DIAG_PRESSLOG).
+# Bottom row is Ctrl Win Alt Space Alt Fn Menu Ctrl; Fn (col 11 row 5) = 0xF0 = KC_FN (see the fn table below).
+codes = [
+  0x00, 0x29, 0x2B, 0x39, 0xE1, 0xE0, 0x00, 0x00,    # col 0: Esc Tab Caps LShift LCtrl
+  0x00, 0x1E, 0x14, 0x04, 0x00, 0x00, 0x00, 0x00,    # col 1: 1 q a - -
+  0x00, 0x1F, 0x1A, 0x16, 0x1D, 0xE3, 0x00, 0x00,    # col 2: 2 w s z LGui
+  0x00, 0x20, 0x08, 0x07, 0x1B, 0xE2, 0x00, 0x00,    # col 3: 3 e d x LAlt
+  0x00, 0x21, 0x15, 0x09, 0x06, 0x00, 0x00, 0x00,    # col 4: 4 r f c -
+  0x00, 0x22, 0x17, 0x0A, 0x19, 0x00, 0x00, 0x00,    # col 5: 5 t g v -
+  0x00, 0x23, 0x1C, 0x0B, 0x05, 0x2C, 0x00, 0x00,    # col 6: 6 y h b Space
+  0x00, 0x24, 0x18, 0x0D, 0x11, 0x00, 0x00, 0x00,    # col 7: 7 u j n -
+  0x00, 0x25, 0x0C, 0x0E, 0x10, 0x00, 0x00, 0x00,    # col 8: 8 i k m -
+  0x00, 0x26, 0x12, 0x0F, 0x36, 0x00, 0x00, 0x00,    # col 9: 9 o l , -
+  0x00, 0x27, 0x13, 0x33, 0x37, 0xE6, 0x00, 0x00,    # col 10: 0 p ; . RAlt
+  0x00, 0x2D, 0x2F, 0x34, 0x38, 0xF0, 0x00, 0x00,    # col 11: - [ ' / Fn
+  0x00, 0x2E, 0x30, 0x00, 0xE5, 0x65, 0x00, 0x00,    # col 12: = ] - RShift Menu
+  0x00, 0x2A, 0x31, 0x28, 0x00, 0xE4, 0x00, 0x00,    # col 13: Bksp \ Enter - RCtrl
+]
+
+[fnmap]
+# Layer used while Fn is held (all profiles); 0x00 = fall through. Fn+Esc=`, Fn+1/2/3 = profile 1/2/3,
+# Fn+4..9 = prev / play-pause / next / mute / vol- / vol+, Fn+Bksp=Del, Fn+IJKL=arrows, Fn+U/O=Home/End,
+# Fn+Y/H=PgUp/PgDn, Fn+P=PrtSc, Fn+Tab=next profile, Fn+\=next lighting, Fn+;/'=colour or speed, Fn+LCtrl=rapid trigger.
+# Codes: 0xF1 next profile, 0xF2 next lighting, 0xF3 RT toggle, 0xF4/0xF5 colour-speed -/+, 0xF6..0xF8 profile 1..3,
+# 0xE8 prev 0xE9 play/pause 0xEA next 0xEB mute 0xEC vol- 0xED vol+.
+codes = [
+  0x00, 0x35, 0xF1, 0x00, 0x00, 0xF3, 0x00, 0x00,    # col 0: ` NextProfile - - RapidTrigger
+  0x00, 0xF6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 1: Profile1 - - - -
+  0x00, 0xF7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 2: Profile2 - - - -
+  0x00, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 3: Profile3 - - - -
+  0x00, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 4: Prev - - - -
+  0x00, 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 5: Play - - - -
+  0x00, 0xEA, 0x4B, 0x4E, 0x00, 0x00, 0x00, 0x00,    # col 6: Next PgUp PgDn - -
+  0x00, 0xEB, 0x4A, 0x50, 0x00, 0x00, 0x00, 0x00,    # col 7: Mute Home Left - -
+  0x00, 0xEC, 0x52, 0x51, 0x00, 0x00, 0x00, 0x00,    # col 8: Vol- Up Down - -
+  0x00, 0xED, 0x4D, 0x4F, 0x00, 0x00, 0x00, 0x00,    # col 9: Vol+ End Right - -
+  0x00, 0x00, 0x46, 0xF4, 0x00, 0x00, 0x00, 0x00,    # col 10: - PrtSc Colour/Speed- - -
+  0x00, 0x00, 0x00, 0xF5, 0x00, 0x00, 0x00, 0x00,    # col 11: - - Colour/Speed+ - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 12: - - - - -
+  0x00, 0x4C, 0xF2, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 13: Del NextLighting - - -
+]
+
+[layer2]
+# Profile 2 overrides (0x00 = same as base). 4 5 6 = prev / play-pause / next,
+# 7 8 9 = mute / volume down / volume up, I J K L = arrows (no Fn needed). Fn layer still wins.
+# Media codes: 0xE8 prev, 0xE9 play/pause, 0xEA next, 0xEB mute, 0xEC vol-, 0xED vol+.
+codes = [
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 0: - - - - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 1: - - - - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 2: - - - - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 3: - - - - -
+  0x00, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 4: Prev - - - -
+  0x00, 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 5: Play - - - -
+  0x00, 0xEA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 6: Next - - - -
+  0x00, 0xEB, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00,    # col 7: Mute - Left - -
+  0x00, 0xEC, 0x52, 0x51, 0x00, 0x00, 0x00, 0x00,    # col 8: Vol- Up Down - -
+  0x00, 0xED, 0x00, 0x4F, 0x00, 0x00, 0x00, 0x00,    # col 9: Vol+ - Right - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 10: - - - - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 11: - - - - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 12: - - - - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 13: - - - - -
+]
+
+[layer3]
+# Profile 3 overrides: the number row types F1..F12 directly (1..0 - = -> F1..F12).
+codes = [
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 0: - - - - -
+  0x00, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 1: F1 - - - -
+  0x00, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 2: F2 - - - -
+  0x00, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 3: F3 - - - -
+  0x00, 0x3D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 4: F4 - - - -
+  0x00, 0x3E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 5: F5 - - - -
+  0x00, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 6: F6 - - - -
+  0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 7: F7 - - - -
+  0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 8: F8 - - - -
+  0x00, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 9: F9 - - - -
+  0x00, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 10: F10 - - - -
+  0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 11: F11 - - - -
+  0x00, 0x45, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 12: F12 - - - -
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,    # col 13: - - - - -
+]

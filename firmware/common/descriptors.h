@@ -28,13 +28,15 @@
 
 /* ---- standard descriptor lengths ---- */
 #define MG_DEVICE_DESC_SIZE       18
-#define MG_CONFIG_DESC_SIZE       77      /* 9 + (9+9+7) + (9+9+7) + (9+9)        */
+#define MG_CONFIG_DESC_SIZE       84      /* 9 + (9+9+7) + (9+9+7) + (9+9+7)      */
 #define MG_QUALIFIER_DESC_SIZE    10
 
 /* ---- endpoints ---- */
 #define MG_EP_BOOT_KBD_IN         0x81    /* IF0 interrupt IN, 8-byte boot report */
 #define MG_EP_EXT_IN              0x82    /* IF1 interrupt IN, NKRO/consumer/...   */
-/* IF2 (vendor) has no dedicated endpoint: feature reports travel over EP0.       */
+#define MG_EP_VENDOR_IN           0x83    /* IF2 interrupt IN, 64 B (idle). Feature reports still
+                                           * travel over EP0, but Linux usbhid refuses to bind a HID
+                                           * interface with no interrupt-IN endpoint (stock has one). */
 
 extern const uint8_t monsgeek_device_desc[MG_DEVICE_DESC_SIZE];
 extern const uint8_t monsgeek_config_desc[MG_CONFIG_DESC_SIZE];

@@ -39,7 +39,9 @@ enum {
   LED_MODE_RIPPLE     = 5,
   LED_MODE_RAINBOW    = 16,  /* full-board rainbow cycle                         */
   LED_MODE_USERPIC    = 13,  /* per-key colours from SET_USERPIC 0x0C            */
-  LED_MODE_PERKEY     = 25   /* per-key colours / GIF (also userpic-backed)      */
+  LED_MODE_PERKEY     = 25,  /* per-key colours / GIF (also userpic-backed)      */
+  LED_MODE_RANDOM_RAINBOW = 0x40, /* firmware-only: every key cycles hue from its own random start */
+  LED_MODE_LIVE       = 0x41 /* firmware-only: show host-streamed frames (FEA_LIVE_LEDS); main.c */
 };
 
 /* options byte: (direction << 4) | flag.

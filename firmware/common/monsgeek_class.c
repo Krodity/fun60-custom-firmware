@@ -14,6 +14,8 @@
 #define HID_REPORT_TYPE_OUTPUT    2
 #define HID_REPORT_TYPE_FEATURE   3
 
+void board_enter_bootloader(void);   /* main.c */
+
 static usb_sts_type class_init_handler(void *udev);
 static usb_sts_type class_clear_handler(void *udev);
 static usb_sts_type class_setup_handler(void *udev, usb_setup_type *setup);
@@ -46,10 +48,12 @@ static usb_sts_type class_init_handler(void *udev)
   monsgeek_class_t *p = (monsgeek_class_t *)pudev->class_handler->pdata;
 
   /* IF0 boot keyboard: interrupt IN, 8 byte */
+  for (unsigned e = 0; e < 8; e++) g_ep_busy[e] = 0;
   usbd_ept_open(pudev, MG_EP_BOOT_KBD_IN, EPT_INT_TYPE, 8);
   /* IF1 extended: interrupt IN, 64 byte */
   usbd_ept_open(pudev, MG_EP_EXT_IN, EPT_INT_TYPE, MONSGEEK_REPORT_SIZE);
-  /* IF2 vendor: feature reports over EP0, no dedicated endpoint */
+  /* IF2 vendor: feature reports over EP0; idle interrupt IN so usbhid binds it */
+  usbd_ept_open(pudev, MG_EP_VENDOR_IN, EPT_INT_TYPE, MONSGEEK_REPORT_SIZE);
 
   p->hid_state = 0;
   monsgeek_state_init(&p->state);
@@ -61,6 +65,7 @@ static usb_sts_type class_clear_handler(void *udev)
   usbd_core_type *pudev = (usbd_core_type *)udev;
   usbd_ept_close(pudev, MG_EP_BOOT_KBD_IN);
   usbd_ept_close(pudev, MG_EP_EXT_IN);
+  usbd_ept_close(pudev, MG_EP_VENDOR_IN);
   return USB_OK;
 }
 
@@ -212,14 +217,22 @@ static usb_sts_type class_ept0_rx_handler(void *udev)
         p->vendor_report[i] = (i < recv_len) ? p->scratch[i] : 0;
       /* run the dispatcher in place; the response is read back via GET_REPORT */
       monsgeek_vendor_dispatch(&p->state, p->vendor_report);
+      /* act on enter-bootloader here (IRQ context) so it never depends on the main loop */
+      if (p->state.enter_bootloader) board_enter_bootloader();
     }
   }
   return USB_OK;
 }
 
+/* IN-endpoint busy flags: set by the sender, cleared here when the host has
+ * taken the data. Lets main.c avoid overwriting an in-flight report (which
+ * silently dropped key releases -> "stuck" keys). */
+volatile uint8_t g_ep_busy[8];
+
 static usb_sts_type class_in_handler(void *udev, uint8_t ept_num)
 {
-  (void)udev; (void)ept_num;
+  (void)udev;
+  g_ep_busy[ept_num & 0x07u] = 0;
   return USB_OK;
 }
 

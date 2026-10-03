@@ -112,6 +112,22 @@ void led_effects_render(const led_params_t *p,
     return;
   }
 
+  case LED_MODE_RANDOM_RAINBOW: {
+    /* each LED starts at its own pseudo-random hue and drifts at its own rate
+     * (75..150% of the base speed), so the board shimmers instead of moving as
+     * one wave. Deterministic per LED: no RNG state to keep. */
+    for (i = 0; i < MG_NUM_LEDS; i++) {
+      uint32_t h = (uint32_t)i * 2654435761u;          /* Knuth multiplicative hash */
+      uint8_t start = (uint8_t)(h >> 24);
+      uint32_t rate = 3u + ((h >> 8) & 3u);             /* 3..6 quarters */
+      uint8_t hue = (uint8_t)(start + phase8(t_ms * rate / 4u, p->speed));
+      uint8_t r, g, b;
+      led_hsv2rgb(hue, 255, bri, &r, &g, &b);
+      out[i][0] = r; out[i][1] = g; out[i][2] = b;
+    }
+    return;
+  }
+
   case LED_MODE_USERPIC:
   case LED_MODE_PERKEY:
     /* per-key Static: each LED shows its stored colour, scaled by brightness */

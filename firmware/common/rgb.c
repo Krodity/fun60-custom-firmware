@@ -112,7 +112,10 @@ void rgb_show(const led_frame_t frame)
   unsigned i;
 
   /* wait out any in-flight transfer so the framebuffer is not torn */
-  while (rgb_busy()) { /* spin: a frame is ~1.7 ms, render cadence is far slower */ }
+  {
+    uint32_t spin = 2000000;          /* a frame is ~1.7 ms; bound it so a DMA fault cannot wedge the loop */
+    while (rgb_busy() && --spin) { }
+  }
   dma_channel_enable(DMA1_CHANNEL1, FALSE);
   dma_flag_clear(DMA1_FDT1_FLAG);
   dma_flag_clear(DMA1_HDT1_FLAG);

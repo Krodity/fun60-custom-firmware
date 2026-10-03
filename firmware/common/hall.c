@@ -61,25 +61,37 @@ void hall_process(hall_engine_t *e, const uint16_t *raw, uint8_t *pressed)
       continue;
     }
 
-    /* --- released-rest baseline + deepest-press extreme tracking --- */
+    /* --- released-rest baseline + deepest-press extreme tracking ---
+     * The baseline used to jump straight to any reading beyond it, so one noise
+     * spike raised it for good; with a shallow actuation point the rest level
+     * then read as "pressed" (seen on hardware: Tab phantom-held, which also
+     * turned Fn into Fn+Tab = next profile). Now it moves at most 1 count per
+     * scan toward a higher reading: real drift is still followed (~1000/s at
+     * ~1 kHz scan), a single spike moves it by 1. */
 #if HALL_PRESS_DECREASES
-    if (r > k->baseline) k->baseline = r;
+    if (r > k->baseline) k->baseline += 1;
     if (r < k->extreme)  k->extreme  = r;
 #else
-    if (r < k->baseline) k->baseline = r;
+    if (r < k->baseline) k->baseline -= 1;
     if (r > k->extreme)  k->extreme  = r;
 #endif
 
     int d = hall_deflection(k, r);
     if (d < 0) d = 0;
 
-    /* follow slow downward drift of the rest level when sitting near rest */
-    if (!k->pressed && d <= HALL_NOISE_COUNTS) {
+    /* follow slow drift of the rest level back toward the reading while
+     * released: immediately within the noise band, and also (1 count per 8
+     * scans) anywhere below half the actuation depth, so a stale baseline
+     * offset can never persist and hold a key "pressed". */
+    if (!k->pressed) {
+      int act_half = (int)HALL_CMM_TO_COUNTS(c->press_cmm) / 2;
+      if (d <= HALL_NOISE_COUNTS || (d < act_half && (++k->heal & 7u) == 0)) {
 #if HALL_PRESS_DECREASES
-      if (k->baseline > r) k->baseline -= 1;
+        if (k->baseline > r) k->baseline -= 1;
 #else
-      if (k->baseline < r) k->baseline += 1;
+        if (k->baseline < r) k->baseline += 1;
 #endif
+      }
     }
     k->travel = (int16_t)d;
 

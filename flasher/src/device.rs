@@ -8,6 +8,10 @@ use std::time::{Duration, Instant};
 
 pub const VID: u16 = 0x3151;
 pub const PID_NORMAL: u16 = 0x5030;
+/// Normal-mode PIDs this flasher will open. 0x5030 is the most common, but devices.json puts many RY5088
+/// boards elsewhere (e.g. FUN60 Ultra 2381 on 0x502D). The PID only gates which handle we open; the
+/// dev_id from GET_INFOR is still the model discriminator.
+pub const PIDS_NORMAL: &[u16] = &[0x5030, 0x502D];
 pub const PID_BOOT: u16 = 0x502A;
 const UP_NORMAL: u16 = 0xFFFF;
 const UP_BOOT: u16 = 0xFF01;
@@ -43,10 +47,10 @@ impl Dev {
         let _ = self.api.refresh_devices();
     }
 
-    fn open(&self, pid: u16, up: u16, usage: Option<u16>) -> Option<HidDevice> {
+    fn open(&self, pids: &[u16], up: u16, usage: Option<u16>) -> Option<HidDevice> {
         for info in self.api.device_list() {
             if info.vendor_id() == VID
-                && info.product_id() == pid
+                && pids.contains(&info.product_id())
                 && info.usage_page() == up
                 && usage.map_or(true, |u| info.usage() == u)
             {
@@ -58,16 +62,16 @@ impl Dev {
         None
     }
 
-    fn present(&self, pid: u16, up: u16) -> bool {
-        self.api.device_list().any(|i| i.vendor_id() == VID && i.product_id() == pid && i.usage_page() == up)
+    fn present(&self, pids: &[u16], up: u16) -> bool {
+        self.api.device_list().any(|i| i.vendor_id() == VID && pids.contains(&i.product_id()) && i.usage_page() == up)
     }
 
-    pub fn normal_present(&self) -> bool { self.present(PID_NORMAL, UP_NORMAL) }
-    pub fn boot_present(&self) -> bool { self.present(PID_BOOT, UP_BOOT) }
+    pub fn normal_present(&self) -> bool { self.present(PIDS_NORMAL, UP_NORMAL) }
+    pub fn boot_present(&self) -> bool { self.present(&[PID_BOOT], UP_BOOT) }
 
     /// Read GET_INFOR from the connected keyboard (normal mode). Returns (dev_id, version).
     pub fn read_infor(&self) -> Option<(u16, String)> {
-        let d = self.open(PID_NORMAL, UP_NORMAL, Some(2))?;
+        let d = self.open(PIDS_NORMAL, UP_NORMAL, Some(2))?;
         send(&d, &proto::get_infor()).ok()?;
         sleep(ms(50));
         let r = recv(&d)?;
@@ -77,7 +81,7 @@ impl Dev {
 
     /// Open the normal-mode device and read its USB manufacturer / product / serial strings.
     pub fn usb_strings(&self) -> (Option<String>, Option<String>, Option<String>) {
-        match self.open(PID_NORMAL, UP_NORMAL, Some(2)) {
+        match self.open(PIDS_NORMAL, UP_NORMAL, Some(2)) {
             Some(d) => (
                 d.get_manufacturer_string().ok().flatten(),
                 d.get_product_string().ok().flatten(),
@@ -89,7 +93,7 @@ impl Dev {
 
     /// Send the enter-bootloader sequence (WIPES config) and wait up to ~20s for re-enumeration to 502A.
     pub fn enter_bootloader(&mut self) -> Result<(), String> {
-        let d = self.open(PID_NORMAL, UP_NORMAL, Some(2)).ok_or("not in normal mode (3151:5030)")?;
+        let d = self.open(PIDS_NORMAL, UP_NORMAL, Some(2)).ok_or("not in normal mode (3151:5030/502D)")?;
         send(&d, &proto::isp_prepare()).map_err(|e| format!("enter-bootloader (ISP_PREPARE) failed: {e}"))?;
         sleep(ms(100));
         // This command resets the device, so its transfer may report an error as the port drops — that is
@@ -110,7 +114,7 @@ impl Dev {
     /// Flash a 0x5000-slice while in bootloader mode. `progress(done, total)` per chunk. Returns the ACK
     /// (None if the device reset before ACK — treat success via re-enumeration, see `wait_normal`).
     pub fn flash_slice<F: FnMut(usize, usize)>(&self, slice: &[u8], mut progress: F) -> Result<Option<bool>, String> {
-        let d = self.open(PID_BOOT, UP_BOOT, None).ok_or("not in bootloader mode (3151:502A)")?;
+        let d = self.open(&[PID_BOOT], UP_BOOT, None).ok_or("not in bootloader mode (3151:502A)")?;
         let chunks = proto::chunkify(slice);
         if chunks.len() > u16::MAX as usize {
             return Err(format!("image too large: {} chunks exceeds the 16-bit transfer limit", chunks.len()));
@@ -124,7 +128,10 @@ impl Dev {
         for (i, ch) in chunks.iter().enumerate() {
             send(&d, ch)?;
             progress(i + 1, chunks.len());
-            sleep(ms(2));
+            // The bootloader handles one report per main-loop pass (copy, program, read-back); a report that
+            // lands before the previous one is consumed overwrites it and that chunk is silently dropped.
+            // 2 ms outran it on Linux hidraw (FUN60 Ultra 2381); 10 ms verified.
+            sleep(ms(10));
         }
         sleep(ms(30));
         send(&d, &proto::build_complete(cc, cks))?;

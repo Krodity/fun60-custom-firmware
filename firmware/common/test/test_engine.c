@@ -3,6 +3,7 @@
  * Builds natively (no AT32/USB). Run via `make test`.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "hall.h"
 #include "hid_report.h"
@@ -21,6 +22,20 @@ static void frame(hall_engine_t *e, uint8_t *pressed, unsigned idx, uint16_t val
   for (unsigned i = 0; i < KS_NUM_KEYS; i++) raw[i] = def;
   raw[idx] = val;
   hall_process(e, raw, pressed);
+}
+
+/* site index of the first keymap entry holding `code`, or -1 if absent */
+static int site_find(uint8_t code)
+{
+  for (unsigned i = 0; i < KS_NUM_KEYS; i++) if (keymap_default[i] == code) return (int)i;
+  return -1;
+}
+
+/* site index of the first keymap entry holding `code` (profile-independent tests) */
+static unsigned site_of(uint8_t code)
+{
+  for (unsigned i = 0; i < KS_NUM_KEYS; i++) if (keymap_default[i] == code) return i;
+  fprintf(stderr, "keycode 0x%02X not in keymap\n", code); exit(2);
 }
 
 int main(void)
@@ -68,13 +83,30 @@ int main(void)
   frame(&e, pressed, K, 2600, REST);                 /* travel 400 < actuation 800 again */
   CHECK(pressed[K] == 0, "re-armed: the next first press again needs the actuation point");
 
+  printf("[2c] Baseline: a single upward spike must not leave a key 'pressed'\n");
+  {
+    hall_engine_t e2;
+    uint8_t pr2[KS_NUM_KEYS];
+    hall_init(&e2);
+    frame(&e2, pr2, K, REST, REST);                  /* prime */
+    for (int i = 0; i < 20; i++) frame(&e2, pr2, K, REST, REST);
+    uint16_t before = e2.key[K].baseline;
+    frame(&e2, pr2, K, (uint16_t)(REST + 400), REST);/* one-sample glitch upward */
+    CHECK(e2.key[K].baseline <= before + 1, "spike raises the baseline by at most 1 count");
+    int ever = 0;
+    for (int i = 0; i < 50; i++) { frame(&e2, pr2, K, REST, REST); ever |= pr2[K]; }
+    CHECK(!ever, "key never reads pressed after the spike");
+    CHECK(e2.key[K].baseline <= before + 1, "baseline settles back to rest");
+  }
+
   printf("[3] Boot report: modifiers fold, keycodes fill, de-dupe\n");
   {
     uint8_t pr[KS_NUM_KEYS]; memset(pr, 0, sizeof pr);
     uint8_t rep[HID_BOOT_REPORT_LEN];
-    pr[1] = 1;   /* Esc    0x29 */
-    pr[4] = 1;   /* LShift 0xE1 -> modifier bit1 */
-    pr[9] = 1;   /* A      0x04 */
+    /* look sites up by keycode so the test holds for any profile's layout */
+    pr[site_of(0x29)] = 1;   /* Esc    */
+    pr[site_of(0xE1)] = 1;   /* LShift -> modifier bit1 */
+    pr[site_of(0x04)] = 1;   /* A      */
     uint8_t n = hid_build_boot_report(pr, keymap_default, rep);
     CHECK(n == 2, "two non-modifier keys");
     CHECK(rep[0] == 0x02, "LShift folded into modifier byte (bit1)");
@@ -84,13 +116,36 @@ int main(void)
     CHECK(has_esc && has_a, "Esc + A present in keycode slots");
   }
 
+  printf("[5] Fn layer: KC_FN switches to keymap_fn, 0 falls through\n");
+  if (site_find(KC_FN) < 0) {
+    printf("  skip: profile has no Fn key\n");
+  } else {
+    uint8_t pr[KS_NUM_KEYS], act[KS_NUM_KEYS], rep[HID_BOOT_REPORT_LEN];
+    unsigned fn = (unsigned)site_find(KC_FN), k = site_of(0x0C) /* 'i' */, a = site_of(0x04) /* 'a' */;
+    memset(pr, 0, sizeof pr);
+    pr[k] = 1;
+    keymap_resolve(pr, keymap_default, keymap_fn, KC_FN, act);
+    hid_build_boot_report(pr, act, rep);
+    CHECK(rep[2] == 0x0C, "no Fn: 'i' sends i");
+    pr[fn] = 1;
+    keymap_resolve(pr, keymap_default, keymap_fn, KC_FN, act);
+    hid_build_boot_report(pr, act, rep);
+    CHECK(act[k] == (keymap_fn[k] ? keymap_fn[k] : 0x0C), "Fn+'i' resolves through keymap_fn");
+    CHECK(act[fn] == 0, "the Fn key itself never reaches the host");
+    int only_fn_code = 1;
+    for (int j = 2; j < 8; j++) if (rep[j] != 0 && rep[j] != act[k]) only_fn_code = 0;
+    CHECK(only_fn_code, "Fn+'i' report holds only the layer code (no 0xF0)");
+    pr[k] = 0; pr[a] = 1;
+    keymap_resolve(pr, keymap_default, keymap_fn, KC_FN, act);
+    CHECK(act[a] == (keymap_fn[a] ? keymap_fn[a] : 0x04), "Fn+key with fn=0 falls through to base");
+  }
+
   printf("[4] Boot report: >6 keys -> ErrorRollOver\n");
   {
     uint8_t pr[KS_NUM_KEYS]; memset(pr, 0, sizeof pr);
     uint8_t rep[HID_BOOT_REPORT_LEN];
-    /* 7 distinct letter keys: indices 7('1'),13('2'),19('3'),25('4'),31('5'),37('6'),43('7') */
-    unsigned ks[7] = {7,13,19,25,31,37,43};
-    for (int i = 0; i < 7; i++) pr[ks[i]] = 1;
+    /* 7 distinct non-modifier keys: '1'..'7' (0x1E..0x24), located by keycode */
+    for (int i = 0; i < 7; i++) pr[site_of((uint8_t)(0x1E + i))] = 1;
     hid_build_boot_report(pr, keymap_default, rep);
     int rollover = 1;
     for (int i = 2; i < 8; i++) if (rep[i] != 0x01) rollover = 0;
