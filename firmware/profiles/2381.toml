@@ -70,11 +70,21 @@ press_decreases  = true       # confirmed 2026-10-03: full press drops ~1100-115
 full_travel_cmm  = 400        # nominal full travel, hundredths of a mm (4.00 mm)
 assumed_span     = 1150       # measured: idle ~2000-2220, bottomed-out ~900-1100
 noise_counts     = 16         # baseline drift-follow noise band
-# default actuation / rapid-trigger, hundredths of a mm (re-settable in the app)
-press_cmm        = 200        # 2.00 mm actuation
-release_cmm      = 150        # 1.50 mm release
-rt_press_cmm     = 50         # 0.50 mm rapid-trigger press delta
-rt_release_cmm   = 50         # 0.50 mm rapid-trigger release delta
+# default actuation / rapid-trigger, hundredths of a mm (re-settable live: vendor 0x65).
+# Tuned on hardware 2026-10-03: 0.50 actuation (lower = resting fingers trigger keys),
+# 0.15 release (keys stay held), RT 0.06 press / 0.15 release (0.01-0.04 chattered;
+# a 0.06 RT release dropped held keys like Win/Backspace).
+press_cmm        = 50         # 0.50 mm actuation
+release_cmm      = 15         # 0.15 mm release
+rt_press_cmm     = 6          # 0.06 mm rapid-trigger press delta
+rt_release_cmm   = 15         # 0.15 mm rapid-trigger release delta
+
+[magnetism]
+# Factory values of the per-key magnetism tables (what a config reset restores).
+press    = 50
+lift     = 15
+rt_press = 6
+rt_lift  = 15
 
 [leds]
 count   = 61                  # per-key WS2812 count  # TODO: confirm on hardware (LED chain + serpentine copied from 2307)

@@ -144,8 +144,8 @@ int main(void)
     memset(mock_flash, 0xFF, sizeof mock_flash);
     was_valid = persist_load(&mock_ops, &a);
     CHECK(was_valid == 0, "blank flash reports first-boot");
-    CHECK(a.cfg[0x08] == LED_MODE_WAVE && a.mag_press[0] == 200,
-          "first-boot yields clean defaults (Wave LED, 2.0 mm actuation)");
+    CHECK(a.cfg[0x08] == LED_MODE_WAVE && a.mag_press[0] == MG_DEF_MAG_PRESS,
+          "first-boot yields clean defaults (Wave LED, profile actuation)");
 
     /* mutate, save, reload into a fresh state -> identical */
     clr(r); r[0]=FEA_SET_PROFILE;  r[1]=3; disp(&a, r);
@@ -182,7 +182,8 @@ int main(void)
     disp(&st, r);
     CHECK(r[10]==0xFA && r[11]==0x00, "GET_MULTI_MAG returns raw page (key5=250)");
     /* default key (untouched) still reads 200 */
-    CHECK(r[0]==0xC8 && r[1]==0x00, "GET_MULTI_MAG key0 = default 200 (2.0 mm)");
+    CHECK(r[0]==(uint8_t)MG_DEF_MAG_PRESS && r[1]==(uint8_t)(MG_DEF_MAG_PRESS >> 8),
+          "GET_MULTI_MAG key0 = the profile's default actuation");
     /* global key mode 0x1D -> 0x9D */
     clr(r); r[0]=FEA_SET_KEY_MAG_MODE; r[1]=1; disp(&st, r);
     CHECK(st.mag_global_mode==1 && st.mag_mode[0]==1 && st.mag_mode[40]==1,

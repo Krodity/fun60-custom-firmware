@@ -51,11 +51,16 @@ int main(void)
   CHECK(pressed[K] == 0, "released after baseline seed");
   frame(&e, pressed, K, DEEP, REST);                 /* full press */
   CHECK(pressed[K] == 1, "press at 2000 counts actuates");
-  /* travel 700 counts is in the (release 600, actuation 800) hysteresis band */
-  frame(&e, pressed, K, 2300, REST);
-  CHECK(pressed[K] == 1, "stays pressed in hysteresis band (700 counts)");
-  frame(&e, pressed, K, 2750, REST);                 /* travel 250 < release 600 */
-  CHECK(pressed[K] == 0, "releases once travel drops below release point");
+  {
+    /* derive the band from the profile's defaults so any tuning is tested */
+    int act = (int)HALL_CMM_TO_COUNTS(HALL_DEF_PRESS_CMM);
+    int rel = (int)HALL_CMM_TO_COUNTS(HALL_DEF_RELEASE_CMM);
+    if (rel >= act) rel = act - (int)HALL_CMM_TO_COUNTS(20);
+    frame(&e, pressed, K, (uint16_t)(REST - (act + rel) / 2), REST);
+    CHECK(pressed[K] == 1, "stays pressed inside the hysteresis band");
+    frame(&e, pressed, K, (uint16_t)(REST - rel / 2), REST);
+    CHECK(pressed[K] == 0, "releases once travel drops below release point");
+  }
 
   printf("[2] Rapid Trigger: release/re-press on direction reversal\n");
   hall_init(&e);

@@ -89,6 +89,7 @@ def main():
     hall = dict(HALL_DEFAULTS)
     hall.update(p.get("hall", {}))
     mag = dict(MAG_DEFAULTS)
+    mag.update(p.get("magnetism", {}))   # factory per-key magnetism (centi-mm), optional
     keymap = p.get("keymap", {}).get("codes", [])
     fnmap = p.get("fnmap", {}).get("codes", [])
     led_site = p.get("leds", {}).get("led_site", [])

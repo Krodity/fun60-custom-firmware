@@ -75,7 +75,8 @@ Each profile remembers its own lighting mode (changed with Fn + \\).
 
 ## Switch feel (current)
 
-Actuation **0.50 mm** · release **0.35 mm** · rapid trigger **0.06 mm** press/release, on for all keys.
+Actuation **0.50 mm** · release **0.15 mm** · rapid trigger **0.06 mm press / 0.15 mm release**, on for all keys.
+The 0.15 mm releases keep held keys (Win, Backspace, Shift) down while your finger relaxes; quick taps still re-trigger after 0.06 mm.
 
 ## Per-key colours & live lighting (PC)
 
@@ -129,9 +130,9 @@ import sys; sys.path.insert(0,'tools'); from fun60_rgb import Fun60
 kb=Fun60()
 for k in range(64):
     kb.q([0x65,0x00,0,k,0,0,0,0, 50,0])   # actuation 0.50 mm
-    kb.q([0x65,0x01,0,k,0,0,0,0, 35,0])   # release   0.35 mm
+    kb.q([0x65,0x01,0,k,0,0,0,0, 15,0])   # release   0.15 mm
     kb.q([0x65,0x02,0,k,0,0,0,0,  6,0])   # RT press  0.06 mm
-    kb.q([0x65,0x03,0,k,0,0,0,0,  6,0])   # RT release 0.06 mm
+    kb.q([0x65,0x03,0,k,0,0,0,0, 15,0])   # RT release 0.15 mm
 "
 ```
 Below ~0.04 mm rapid trigger, and below ~0.3 mm actuation, the keys start chattering / firing from resting fingers.

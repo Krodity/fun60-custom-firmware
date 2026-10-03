@@ -26,7 +26,8 @@ profile and will likely need the hardware notes re-checked.
 - **Analog key scanning** of all 61 TMR sensors at **~1100 Hz**, with a 4-sample moving average and a
   spike-proof baseline (no phantom or stuck keys).
 - **Adjustable actuation & rapid trigger** (per key, saved on the keyboard). Current: actuation 0.50 mm,
-  release 0.35 mm, rapid trigger 0.06 mm. **Fn + Left Ctrl** toggles rapid trigger — Space flashes
+  release 0.15 mm, rapid trigger 0.06 mm press / 0.15 mm release (held keys stay held; taps re-trigger fast).
+  These are also the profile's factory defaults (`[hall]` / `[magnetism]`). **Fn + Left Ctrl** toggles rapid trigger — Space flashes
   **red ×3 (on)** / **blue ×3 (off)**.
 - **Three profiles** (Fn + 1 / 2 / 3, or Fn + Tab to cycle), each with its own lighting, colour, speed and
   optional **key layer**:
@@ -162,7 +163,8 @@ Lighting presets, palette, mode order and guide colour live in `firmware/common/
 
 Actuation / rapid trigger can be changed live without reflashing — see `KEYMAP.md`
 (vendor command `0x65`, values in 0.01 mm, written per key). Measured limits on this board: below
-~0.04 mm rapid trigger keys chatter; below ~0.3 mm actuation resting fingers trigger keys.
+~0.04 mm rapid trigger keys chatter; below ~0.3 mm actuation resting fingers trigger keys; a
+rapid-trigger *release* as small as 0.06 mm drops held keys (Win/Backspace) — 0.15 mm keeps them held.
 
 ---
 
