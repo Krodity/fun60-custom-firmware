@@ -104,6 +104,36 @@ int main(void)
     CHECK(e2.key[K].baseline <= before + 1, "baseline settles back to rest");
   }
 
+  printf("[2d] Bad-baseline guard: a key stuck 'pressed' at rest is re-seeded\n");
+  {
+    int act = (int)HALL_CMM_TO_COUNTS(HALL_DEF_PRESS_CMM);
+    int lim = (int)HALL_CMM_TO_COUNTS(100);          /* guard only below 1.00 mm */
+    if (act + 30 >= lim) {
+      printf("  skip: actuation (%d counts) is not below the 1 mm guard\n", act);
+    } else {
+      hall_engine_t e3; uint8_t p3[KS_NUM_KEYS];
+      uint16_t high = (uint16_t)(REST + act + 30);   /* wrong (too high) first reading */
+      hall_init(&e3);
+      frame(&e3, p3, K, high, REST);                 /* seeds the bad baseline */
+      frame(&e3, p3, K, REST, REST);
+      CHECK(p3[K] == 1, "bad seed: key reads pressed at rest (the bug)");
+      int released_at = -1;
+      for (int i = 0; i < 7000 && released_at < 0; i++) {
+        frame(&e3, p3, K, REST, REST);
+        if (!p3[K]) released_at = i;
+      }
+      CHECK(released_at > 0, "guard releases the stuck key");
+      frame(&e3, p3, K, REST, REST);
+      CHECK(p3[K] == 0, "stays released afterwards");
+      /* a real bottomed-out hold must survive the same time */
+      hall_init(&e3);
+      frame(&e3, p3, K, REST, REST);
+      int dropped = 0;
+      for (int i = 0; i < 7000; i++) { frame(&e3, p3, K, DEEP, REST); if (i > 2 && !p3[K]) dropped = 1; }
+      CHECK(!dropped, "a real bottomed-out hold is never released by the guard");
+    }
+  }
+
   printf("[3] Boot report: modifiers fold, keycodes fill, de-dupe\n");
   {
     uint8_t pr[KS_NUM_KEYS]; memset(pr, 0, sizeof pr);

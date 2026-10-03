@@ -4,6 +4,12 @@
  */
 #include "hall.h"
 
+#ifndef HALL_STUCK_FRAMES
+#define HALL_STUCK_FRAMES  5500u   /* ~5 s at ~1100 scans/s */
+#endif
+#define HALL_STUCK_MAX_CMM 100u    /* only shallower than 1.00 mm */
+#define HALL_STUCK_BAND    12      /* counts: "motionless" */
+
 /* HALL_NOISE_COUNTS and the per-key defaults (HALL_DEF_*) come from board_config.h. */
 
 static void hall_seed(hall_key_t *k, uint16_t raw)
@@ -134,6 +140,21 @@ void hall_process(hall_engine_t *e, const uint16_t *raw, uint8_t *pressed)
       else             { if (d <= rel) k->pressed = 0; }
       k->rt_ref = (int16_t)d;
     }
+
+    /* Bad-baseline guard. If the rest reference is wrong (e.g. seeded from a
+     * noisy first reading), a key can sit "pressed" at rest forever: the heal
+     * above only runs while released. A real hold is either bottomed out or
+     * moving; a key that stays pressed for HALL_STUCK_FRAMES while shallower
+     * than HALL_STUCK_MAX_CMM and motionless (+-HALL_STUCK_BAND) is re-seeded.
+     * (Seen on hardware: Tab held for minutes at rest -> phantom Tab, 6KRO
+     * overflow and dropped keys in-game.) */
+    if (k->pressed && d < (int)HALL_CMM_TO_COUNTS(HALL_STUCK_MAX_CMM)) {
+      int dv = (int)r - (int)k->stuck_ref;
+      if (dv < 0) dv = -dv;
+      if (dv <= HALL_STUCK_BAND) {
+        if (++k->stuck >= HALL_STUCK_FRAMES) { hall_seed(k, r); k->stuck = 0; }
+      } else { k->stuck = 0; k->stuck_ref = r; }
+    } else { k->stuck = 0; k->stuck_ref = r; }
 
     if (pressed) pressed[i] = k->pressed;
   }

@@ -533,7 +533,13 @@ int main(void)
       primed = 1;
       filt_pos = (uint8_t)((filt_pos + 1u) % FILT_N);
     }
-    hall_process(&hall, filt, pressed);
+    /* calibrate only after ~64 scans: the first readings after power-up
+     * (column 0 first) run high and used to seed a wrong rest level */
+    if (g_loop_count > 64u) hall_process(&hall, filt, pressed);
+    else for (unsigned i = 0; i < KS_NUM_KEYS; i++) pressed[i] = 0;
+    /* sites with no key in the base map can never count as pressed (they read
+     * near 0 and used to inflate the >10-key fuse) */
+    for (unsigned i = 0; i < KS_NUM_KEYS; i++) if (!keymap_default[i]) pressed[i] = 0;
     if (g_map_state == 1) {
       /* LED mapping. Detection is deliberately independent of the actuation
        * engine (which made some presses not register): a press is a raw drop of
